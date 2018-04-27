@@ -13,11 +13,21 @@ import java.io.OutputStreamWriter;
 import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.net.URL;
+import java.util.concurrent.TimeUnit;
+
+import okhttp3.MediaType;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.RequestBody;
+import okhttp3.Response;
+import okhttp3.ResponseBody;
 
 public class HttpProvider {
     private static final String BASE_URL = "https://telranstudentsproject.appspot.com/_ah/api/contactsApi/v1";
     private static final HttpProvider ourInstance = new HttpProvider();
     private Gson gson;
+    private OkHttpClient client;
+    private MediaType JSON;
 
     public static HttpProvider getInstance() {
         return ourInstance;
@@ -25,6 +35,11 @@ public class HttpProvider {
 
     private HttpProvider() {
         gson = new Gson();
+        client = new OkHttpClient.Builder()
+                .connectTimeout(15, TimeUnit.SECONDS)
+                .readTimeout(15,TimeUnit.SECONDS)
+                .build();
+        JSON = MediaType.parse("application/json; charset=utf-8;");
     }
 
     public String registration(String email, String password) throws Exception {
@@ -69,4 +84,39 @@ public class HttpProvider {
             throw new Exception("Server error! Call to support!");
         }
     }
+
+    public String login(String email, String password) throws Exception {
+        Auth auth = new Auth(email,password);
+        String jBody = gson.toJson(auth);
+
+        RequestBody requestBody = RequestBody.create(JSON,jBody);
+
+        Request request = new Request.Builder()
+                .url(BASE_URL + "/login")
+                .post(requestBody)
+                .addHeader("Authorization","token")
+                .build();
+
+        Response response = client.newCall(request).execute();
+        if(response.isSuccessful()){
+            ResponseBody responseBody = response.body();
+            String token = "";
+            if (responseBody != null) {
+                String jsonResponse = responseBody.string();
+                AuthToken authToken = gson.fromJson(jsonResponse,AuthToken.class);
+                token = authToken.getToken();
+            }
+            return token;
+        }else if (response.code() == 401){
+            throw new Exception("Wrong email or password");
+        }else{
+            ResponseBody responseBody = response.body();
+            if (responseBody != null) {
+                Log.d("MY_TAG", "login: error:" + responseBody.string());
+            }
+            throw new Exception("Server error! Call to support!");
+        }
+    }
+
+
 }
